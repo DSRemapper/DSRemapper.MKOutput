@@ -1,5 +1,8 @@
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace DSRemapper.MKLinuxOutput
@@ -44,6 +47,8 @@ namespace DSRemapper.MKLinuxOutput
     /// </summary>
     public class YDoToolClient : IDisposable
     {
+        private const string DaemonPath = "/usr/bin/ydotoold";
+        private const string SocketPath = "/tmp/.ydotool_socket";
         private readonly ILogger _logger;
         private Socket? daemonSocket;
 
@@ -72,35 +77,40 @@ namespace DSRemapper.MKLinuxOutput
         /// <exception cref="SocketException">Thrown if socket creation or connection fails.</exception>
         private void ConnectSocket()
         {
-            string socketPath;
-            string? envYs = Environment.GetEnvironmentVariable("YDOTOOL_SOCKET");
-            string? envXrd = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            Process.Start("pkill","ydotoold").WaitForExit();
+            
+            string uid = Environment.GetEnvironmentVariable("SUDO_UID") ?? "1000";
+            string gid = Environment.GetEnvironmentVariable("SUDO_GID") ?? "1000";
 
-            if (!string.IsNullOrEmpty(envYs))
-            {
-                socketPath = envYs;
-            }
-            else if (!string.IsNullOrEmpty(envXrd))
-            {
-                socketPath = Path.Combine(envXrd, ".ydotool_socket");
-            }
-            else
-            {
-                socketPath = "/tmp/.ydotool_socket";
-            }
+            /*var uidProcess = Process.Start("id", "-u");
+            uidProcess.WaitForExit();
+            var uid = uidProcess.ExitCode; 
 
-            _logger.LogInformation($"Attempting to connect to ydotoold socket at: {socketPath}");
+            var gidProcess = Process.Start("id", "-g");
+            gidProcess.WaitForExit();
+            var gid = gidProcess.ExitCode;*/
+            _logger.LogInformation($"uid: {uid}, gid: {gid}");
+            string daemonCommand = $"{DaemonPath} --socket-path=\"{SocketPath}\" --socket-own=\"{uid}:{gid}\"";
+
+            // Use sh -c to execute the command string in the background
+            Process.Start("sh", $"-c \"{daemonCommand} &\"");
+
+            //Process.Start(DaemonPath,$"--socket-path=\"{SocketPath}\" --socket-own=\"$(id -u):$(id -g)\"");
+
+            Thread.Sleep(1000);
+
+            _logger.LogInformation($"Attempting to connect to ydotoold socket at: {SocketPath}");
 
             try
             {
-                daemonSocket = new Socket(AddressFamily.Unix, SocketType.Dgram, ProtocolType.Unspecified);
-                var endpoint = new UnixDomainSocketEndPoint(socketPath);
+                daemonSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                var endpoint = new UnixDomainSocketEndPoint(SocketPath);
                 daemonSocket.Connect(endpoint);
                 _logger.LogInformation("Successfully connected to ydotoold socket.");
             }
             catch (Exception ex) when (ex is SocketException || ex is FileNotFoundException)
             {
-                _logger.LogError($"Failed to connect socket '{socketPath}': {ex.Message}");
+                _logger.LogError($"Failed to connect socket '{SocketPath}': {ex.Message}");
                 _logger.LogWarning("Please ensure 'ydotoold' is running and accessible (check permissions/socket path).");
                 // Re-throw to indicate connection failure to the caller (DoTool)
                 throw;
@@ -151,9 +161,11 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="keyCode">The Linux keycode representing the key to release.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient KeyUp(LinuxKeycode keyCode)
+        public YDoToolClient KeyUp(ushort keyCode)
         {
-            pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 0));
+            if (daemonSocket is not null && daemonSocket.Connected)
+                daemonSocket.Send(Encoding.ASCII.GetBytes($"key {keyCode}:0"));
+            //pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 0));
             return this;
         }
         
@@ -162,9 +174,11 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="keyCode">The Linux keycode representing the key to press.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient KeyDown(LinuxKeycode keyCode)
+        public YDoToolClient KeyDown(ushort keyCode)
         {
-            pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 1));
+            if (daemonSocket is not null && daemonSocket.Connected)
+                daemonSocket.Send(Encoding.ASCII.GetBytes($"key {keyCode}:1"));
+            //pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 1));
             return this;
         }
         /// <summary>
@@ -173,10 +187,12 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="keyCode">The Linux keycode representing the key to tap.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient KeyPress(LinuxKeycode keyCode)
+        public YDoToolClient KeyPress(ushort keyCode)
         {
-            pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 1));
-            pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 0));
+            if (daemonSocket is not null && daemonSocket.Connected)
+                daemonSocket.Send(Encoding.ASCII.GetBytes($"key {keyCode}:1 {keyCode}:0"));
+            //pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 1));
+            //pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)keyCode, 0));
             return this;
         }
         /// <summary>
@@ -189,11 +205,11 @@ namespace DSRemapper.MKLinuxOutput
         {
             if (x != 0)
             {
-                pendingEvents.Enqueue((UInputConstants.EV_REL, UInputConstants.REL_X, x));
+                //pendingEvents.Enqueue((UInputConstants.EV_REL, UInputConstants.REL_X, x));
             }
             if (y != 0)
             {
-                pendingEvents.Enqueue((UInputConstants.EV_REL, UInputConstants.REL_Y, y));
+                //pendingEvents.Enqueue((UInputConstants.EV_REL, UInputConstants.REL_Y, y));
             }
             return this;
         }
@@ -202,7 +218,7 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="button">The <see cref="MouseButton"/> to press.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient MouseDown(MouseButton button)
+        public YDoToolClient MouseDown(ushort button)
         {
             pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)button, 1));
             return this;
@@ -212,7 +228,7 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="button">The <see cref="MouseButton"/> to release.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient MouseUp(MouseButton button)
+        public YDoToolClient MouseUp(ushort button)
         {
             pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)button, 0));
             return this;
@@ -222,7 +238,7 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <param name="button">The <see cref="MouseButton"/> to click.</param>
         /// <returns>The current <see cref="YDoToolClient"/> instance for method chaining.</returns>
-        public YDoToolClient MouseClick(MouseButton button)
+        public YDoToolClient MouseClick(ushort button)
         {
             pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)button, 1));
             pendingEvents.Enqueue((UInputConstants.EV_KEY, (ushort)button, 0));
@@ -238,16 +254,27 @@ namespace DSRemapper.MKLinuxOutput
         /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
         public Task ExecuteAsync()
         {
+            if (daemonSocket is null || !daemonSocket.Connected)
+            {
+                _logger.LogError("Socket not connected. Cannot send input event.");
+                return Task.CompletedTask;
+            }
             //_logger.Log(LogLevel.Debug, $"Executing {pendingEvents.Count} pending uinput events.");
 
             // Send all queued events
             while (pendingEvents.TryDequeue(out var ev))
             {
-                UinputEmit(ev.type, ev.code, ev.value);
+                //UinputEmit(ev.type, ev.code, ev.value);
+                //UinputEmit(UInputConstants.EV_SYN, UInputConstants.SYN_REPORT, 0);
+                //var str = JsonSerializer.Serialize(new {cmd="key",args=$"{ev.code}:{ev.value}"});
+                //List<byte> bytes = [..Encoding.ASCII.GetBytes(str)];
+                //bytes.Add(0);
+                //_logger.LogInformation($"Seding key: {ev.code}:{ev.value}");
+                //Process.Start("sh", $"-c \"ydotool key {ev.code}:{ev.value}\"").WaitForExit();
+                //daemonSocket.Send(Encoding.ASCII.GetBytes($"key {ev.code}:{ev.value}"));
             }
 
             // Send a single SYN_REPORT to synchronize all inputs (value 0)
-            UinputEmit(UInputConstants.EV_SYN, UInputConstants.SYN_REPORT, 0);
 
             return Task.CompletedTask;
         }

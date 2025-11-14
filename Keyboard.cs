@@ -43,35 +43,37 @@ namespace DSRemapper.MKLinuxOutput
         /// </summary>
         /// <returns>The <see cref="LinuxKeycode"/> enumeration type</returns>
         [CustomMethod("KeyCodes")]
-        public Type KeyCodes(){
-            return typeof(LinuxKeycode);
+        public Dictionary<string,ushort> KeyCodes(){
+            return Enum.GetValues<LinuxKeycode>().Cast<LinuxKeycode>()
+                .ToDictionary(t=> t.ToString(), t => (ushort)t);
         }
         /// <summary>
         /// Gets the enumerations of all the mouse keycodes supported by ydotool
         /// </summary>
         /// <returns>The <see cref="MouseButton"/> enumeration type</returns>
         [CustomMethod("MouseCodes")]
-        public Type MouseCodes(){
-            return typeof(MouseButton);
+        public Dictionary<string,ushort> MouseCodes(){
+            return Enum.GetValues<MouseButton>().Cast<MouseButton>()
+                .ToDictionary(t=> t.ToString(), t => (ushort)t);
         }
         
-        /// <inheritdoc cref="YDoToolClient.KeyDown(LinuxKeycode)"/>
+        /// <inheritdoc cref="YDoToolClient.KeyDown(ushort)"/>
         [CustomMethod("KeyDown")]
-        public Keyboard KeyDown(LinuxKeycode keycode){
+        public Keyboard KeyDown(ushort keycode){
             if (IsConnected)
                 ydotool.KeyDown(keycode);
             return this;
         }
-        /// <inheritdoc cref="YDoToolClient.KeyUp(LinuxKeycode)"/>
+        /// <inheritdoc cref="YDoToolClient.KeyUp(ushort)"/>
         [CustomMethod("KeyUp")]
-        public Keyboard KeyUp(LinuxKeycode keycode){
+        public Keyboard KeyUp(ushort keycode){
             if (IsConnected)
                 ydotool.KeyUp(keycode);
             return this;
         }
-        /// <inheritdoc cref="YDoToolClient.KeyPress(LinuxKeycode)"/>
+        /// <inheritdoc cref="YDoToolClient.KeyPress(ushort)"/>
         [CustomMethod("KeyPress")]
-        public Keyboard KeyPress(LinuxKeycode keycode){
+        public Keyboard KeyPress(ushort keycode){
             if (IsConnected)
                 ydotool.KeyPress(keycode);
             return this;
@@ -83,23 +85,23 @@ namespace DSRemapper.MKLinuxOutput
                 ydotool.MouseMove(x, y);
             return this;
         }
-        /// <inheritdoc cref="YDoToolClient.MouseDown(MouseButton)"/>
+        /// <inheritdoc cref="YDoToolClient.MouseDown(ushort)"/>
         [CustomMethod("MouseDown")]
-        public Keyboard MouseDown(MouseButton keycode){
+        public Keyboard MouseDown(ushort keycode){
             if (IsConnected)
                 ydotool.MouseDown(keycode);
             return this;
         }
-        /// <inheritdoc cref="YDoToolClient.MouseUp(MouseButton)"/>
+        /// <inheritdoc cref="YDoToolClient.MouseUp(ushort)"/>
         [CustomMethod("MouseUp")]
-        public Keyboard MouseUp(MouseButton keycode){
+        public Keyboard MouseUp(ushort keycode){
             if (IsConnected)
                 ydotool.MouseUp(keycode);
             return this;
         }
-        /// <inheritdoc cref="YDoToolClient.MouseClick(MouseButton)"/>
+        /// <inheritdoc cref="YDoToolClient.MouseClick(ushort)"/>
         [CustomMethod("MousePress")]
-        public Keyboard MousePress(MouseButton keycode){
+        public Keyboard MousePress(ushort keycode){
             if (IsConnected)
                 ydotool.MouseClick(keycode);
             return this;
