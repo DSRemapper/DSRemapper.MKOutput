@@ -1,4 +1,4 @@
-namespace DSRemapper.MKLinuxOutput
+namespace  DSRemapper.MKOutput.Linux
 {
     /// <summary>
     /// Defines standard mouse button codes.

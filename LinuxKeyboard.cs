@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Text;
 
-namespace DSRemapper.MKLinuxOutput
+namespace DSRemapper.MKOutput.Linux
 {
     /// <summary>
     /// Keyboard controller class

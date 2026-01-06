@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace DSRemapper.MKLinuxOutput
+namespace DSRemapper.MKOutput.Linux
 {
     internal abstract class UInputDevice : IDisposable
     {
